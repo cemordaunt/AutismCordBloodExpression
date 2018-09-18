@@ -420,3 +420,98 @@ for(i in 1:length(intersects_genes)){
         brain_blood_genessymbols[[i]] <- gene_symbols
 }
 names(brain_blood_genessymbols) <- names(intersects_genes)
+
+# Blood Cell Type GeneOverlap ####
+cellGenes <- read.csv("Tables/LM22 DEGs.csv", header=TRUE, stringsAsFactors = FALSE)
+
+# Get Gene Lists
+cellList <- lapply(cellGenes[,2:ncol(cellGenes)], function(x){
+        temp <- NULL
+        temp <- cellGenes$Gene[x == 1]
+        temp %>% as.character %>% unique %>% sort
+        return(temp)
+})
+rm(cellGenes)
+
+# Get HGNC Gene Symbols
+genes <- sapply(probes, function(x){getBM(attributes="hgnc_symbol", filters="affy_hugene_2_0_st_v1", values=x, mart=ensembl, 
+                                          verbose=TRUE)})
+genes <- sapply(genes, function(x) x %>% unique %>% sort)
+names(genes) <- c("ASD_Diff", "ASD_Up", "ASD_Down", "nonTD_Diff", "nonTD_Up", "nonTD_Down")
+all_genes <- getBM(attributes="hgnc_symbol", filters="affy_hugene_2_0_st_v1", values=all_probes, mart=ensembl, verbose=TRUE)
+all_genes <- all_genes %>% unlist %>% as.character %>% unique %>% sort
+rm(ensembl, probes, all_probes)
+
+# Overlap Meta and Cell Type Genes
+gom <- newGOM(genes, cellList, genome.size = length(all_genes)) # genome.size = genes on the array by Affy annotation
+oddsRatio <- getMatrix(gom, "odds.ratio") 
+pValue <- getMatrix(gom, "pval")
+fdr <- matrix(p.adjust(pValue, method="fdr"), nrow=nrow(pValue), ncol=ncol(pValue), byrow=FALSE)
+dimnames(fdr) <- dimnames(pValue)
+intersects <- getMatrix(gom, "intersection")
+intersects_genes <- getNestedList(gom, "intersection")
+overlapResults <- as.data.frame(cbind(intersects, oddsRatio, pValue, fdr))
+colnames(overlapResults) <- paste(rep(c("intersect", "odds_ratio", "p_value", "q_value"), each=ncol(intersects)), 
+                                  colnames(overlapResults), sep="_")
+write.table(overlapResults, "Enrichment Gene Lists/MARBLES-EARLI Meta-Analysis Cibersort CellType GeneOverlap Results.txt", sep="\t", 
+            quote=FALSE, row.names=TRUE, col.names=TRUE)
+
+# oddsRatio Heatmap
+oddsRatio <- melt(oddsRatio)
+colnames(oddsRatio) <- c("Meta_Gene", "cell_Gene", "oddsRatio")
+oddsRatio$Meta_Gene <- factor(oddsRatio$Meta_Gene, levels=rev(names(genes)), ordered=TRUE)
+oddsRatio$cell_Gene <- factor(oddsRatio$cell_Gene, levels=names(cellList), ordered=TRUE)
+oddsRatio$intersects <- intersects$intersects
+
+gg <- ggplot(data = oddsRatio)
+gg +
+        geom_tile(aes(x = cell_Gene, y = Meta_Gene, fill = oddsRatio)) +
+        geom_text(aes(x = cell_Gene, y = Meta_Gene, label = intersects), color="white", size=6) +
+        scale_fill_gradientn("Odds Ratio\n", colors = c("#0000FF", "Black", "#FF0000"), values = c(0,0.5,1), na.value = "Black", limits=c(0,2)) +
+        theme_bw(base_size = 24) +
+        theme(panel.grid.major = element_blank(), panel.border = element_rect(color = "black", size = 1.25), 
+              axis.ticks = element_line(size = 1), legend.key = element_blank(), legend.text=element_text(size=14),
+              panel.grid.minor = element_blank(), legend.position = c(1.13, 0.74), 
+              legend.background = element_blank(),
+              plot.margin = unit(c(1,8,1,1), "lines"), 
+              axis.text.x = element_text(size = 12, color = "Black", angle = 60, hjust = 1, vjust = 1),
+              axis.text.y = element_text(size = 14, color = "Black", angle = 0, hjust = 1, vjust = 0.5),
+              axis.title.y = element_text(size=16, color="Black"), axis.title.x=element_blank(),
+              legend.title = element_text(size = 16)) +
+        scale_x_discrete(expand=c(0,0)) +
+        scale_y_discrete(expand=c(0,0)) +
+        ylab("Meta-Analysis Gene")
+ggsave("Figures/EARLI MARBLES Meta Gene Cibersort Cell type GeneOverlap OddsRatio Heatmap.png", dpi = 600, width = 10, height = 6, units = "in")
+
+# Get Cell-Type Genes
+intersects_genes_df <- NULL
+for(i in 1:length(intersects_genes)){
+        for(j in 1:length(intersects_genes[[i]])){
+                temp <- NULL
+                temp <- data.frame("CellType"=rep(names(intersects_genes)[i], length(intersects_genes[[i]][[j]])),
+                                   "Meta_Diff"=rep(names(intersects_genes[[i]])[j], length(intersects_genes[[i]][[j]])),
+                                   "Gene"=intersects_genes[[i]][[j]])
+                intersects_genes_df <- rbind(intersects_genes_df, temp)
+        }
+}
+write.table(intersects_genes_df, "Enrichment Gene Lists/Cibersort Cell Type and Meta-Analysis Overlapping Genes.txt", sep="\t", quote=FALSE, col.names=TRUE, row.names=FALSE)
+
+# Blood CellType GSEA ####
+cellExp <- read.csv("Tables/LM22 DEG Exp.csv", header=TRUE, stringsAsFactors = FALSE)
+cellGenes <- read.csv("Tables/LM22 DEGs.csv", header=TRUE, stringsAsFactors = FALSE)
+table(colnames(cellExp) == colnames(cellGenes)) # All TRUE
+table(cellExp$Gene == cellGenes$Gene) # All TRUE
+cellTypes <- colnames(cellExp)[2:length(colnames(cellExp))] %>% as.character
+diffTest <- list(NULL)
+for(i in 1:length(cellTypes)){
+        temp <- NULL
+        cell <- NULL
+        cell <- cellTypes[i]
+        temp <- cellExp[cellGenes[,cell] == 1, cell] / rowMeans(cellExp[cellGenes[,cell] == 1, cellTypes[!cellTypes == cell]])
+        diffTest[[i]] <- temp
+}
+lapply(diffTest, function(x) table(x >= 1))
+cell_entrezIDs <- sapply(cellList, function(x){getBM(attributes="entrezgene", filters="hgnc_symbol", values=x, mart=ensembl)})
+for(i in 1:length(cell_entrezIDs)){
+        write.table(t(cell_entrezIDs[i]), file="Enrichment Gene Lists/cibersort_cell_genes.gmt", quote=FALSE, row.names=TRUE, col.names=TRUE, append=TRUE)
+}
