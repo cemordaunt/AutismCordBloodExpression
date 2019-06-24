@@ -2,7 +2,7 @@
 Analysis of gene expression in umbilical cord blood from ASD, Non-TD, and TD subjects in the MARBLES and EARLI studies.
 
 ## Article: A meta-analysis of two enriched-risk prospective studies reveals autism-specific transcriptional changes to chromatin, autoimmune, and environmental response genes in umbilical cord blood 
-#### Mordaunt CE, Park BY, Bakulski KM, Feinberg JI, Croen LA, Ladd-Acosta C, Newschaffer C, Volk HE, Ozonoff S, Hertz-Picciotto I, LaSalle JM, Schmidt RJ, and Fallin DM.
+#### Mordaunt CE, Park BY, Bakulski KM, Feinberg JI, Croen LA, Ladd-Acosta C, Newschaffer C, Volk HE, Ozonoff S, Hertz-Picciotto I, LaSalle JM, Schmidt RJ, and Fallin DM. 2019. Under Review at *Molecular Autism*.
 
 ***Preprint:*** https://www.biorxiv.org/content/10.1101/486498v2
 
